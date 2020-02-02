@@ -145,15 +145,30 @@ object Evaluation {
 
 
 
+
     def checkEquivUsingSat(e1: Expr, e2: Expr) : (Boolean, Option[Map[Variable, Boolean]]) = {
 
         // TODO : implement equivalent checking using sat solver
         // if the two expression are not equivalent then return (false, sat-model)
+        var resultMap : Map[Variable, Boolean] = Map.empty
 
         val evalutateExpr = And(List(Or(List(Not(e1),Not(e2))),Or(List(e1,e2))))
         val simlifiedEvalutateExpr = CNFConverter.simplify(evalutateExpr)
         val allClauses = CNFConverter.toCNF(simlifiedEvalutateExpr)
-        val allVariables = getAllVariables(And(allClauses))
+        val allVariables = getAllVariables(And(allClauses)) ++ getAllVariables(evalutateExpr)
+
+
+        //println(simlifiedEvalutateExpr)
+        if (simlifiedEvalutateExpr == BoolLit(false)){
+            return (true,Some(resultMap))
+        }
+        if (simlifiedEvalutateExpr == BoolLit(true)){
+            for(x <- allVariables){
+                resultMap = resultMap + (x -> true)
+            }
+            return (false,Some(resultMap))
+        }
+
         var mapVarToInt : HashMap[Expr,Int] = HashMap.empty
         var varCount = 1
         for (variables <- allVariables){
@@ -180,7 +195,7 @@ object Evaluation {
             S.addClause(Clause(finalClause))
         }
         val isSAT = S.solve()
-        var resultMap : Map[Variable, Boolean] = Map.empty
+        //var resultMap : Map[Variable, Boolean] = Map.empty
         if (isSAT){
             for(x <- allVariables){
                 resultMap = resultMap + (x -> S.modelValue(Literal.create(mapVarToInt(x))))

@@ -1,3 +1,5 @@
+import scala.collection.mutable.HashMap
+
 
 case class CIDR(A: Int, B: Int, C: Int, D: Int, n: Int) {
 
@@ -27,11 +29,38 @@ case class CIDR(A: Int, B: Int, C: Int, D: Int, n: Int) {
 
 object Firewall {
 
+    var variableList : Array[Variable] = new Array[Variable](32)
+    for( w <- 0 until 32) {
+        variableList(w) = Variable("c" + w.toString)
+    }
+
+
     def firewall2BoolFcn(cidrs: Array[CIDR]): Expr = {
 
         // TODO : converts a given firewall table to a boolean expression
-        throw new scala.NotImplementedError("firewall2BoolFcn not implemented")
+        var finalExpressionList : List[Expr] = List.empty
+
+        for(cidr <- cidrs){
+            finalExpressionList = finalExpressionList :+ cidr.toBooleanExpr(variableList)
+        }
+        Or(finalExpressionList)
     }
+    
+        
+    def getAllVariables(e: Expr) : Set[Variable] = {
+        e match {
+            case Variable(name) => Set(Variable(name))
+            case BoolLit(value) => Set.empty
+            case And(args) =>  var retval: Set[Variable] =  Set.empty ; for(a <- args) {retval = getAllVariables(a) ++ retval}; retval
+            case Or(args) => var retval: Set[Variable] = Set.empty ; for(a <- args) {retval = getAllVariables(a) ++ retval}; retval
+            case Not(v) => getAllVariables(v)
+            case _ => Set.empty
+        }
+    }
+
+    
+    
+    
 
     def firewallDifference(f1: Array[CIDR], f2: Array[CIDR]) : Array[CIDR] = {
 
@@ -44,7 +73,66 @@ object Firewall {
         // * you may write helper functions for your convenience            //
         //////////////////////////////////////////////////////////////////////
 
-        throw new scala.NotImplementedError("firewallDifference not implemented")
+        val expr1 = firewall2BoolFcn(f1)
+        val expr2 = firewall2BoolFcn(f2)
+        val finalExpr = And(List(expr1,Not(expr2))) 
+        val simlifiedFinalExpr = CNFConverter.simplify(finalExpr)
+        val allClauses = CNFConverter.toCNF(simlifiedFinalExpr)
+        val allVariables = getAllVariables(And(allClauses))
+        var mapVarToInt : HashMap[Expr,Int] = HashMap.empty
+        var varCount = 1
+        for (variables <- allVariables){
+            mapVarToInt += (variables -> varCount)
+            varCount += 1
+        }
+        
+        
+        
+        var allSAT : List[Map[Variable, Boolean]] = List.empty
+        val S = new Solver()
+        for (clause <- allClauses){
+            var finalClause : List[Literal] = List.empty
+            clause match {
+                case Or(args) => {
+                    for(arg <- args){
+                        arg match {
+                            case Not(value) => {
+                                finalClause = finalClause :+ ~Literal.create(mapVarToInt(value))
+                            }
+                            case _ => {
+                                finalClause = finalClause :+ Literal.create(mapVarToInt(arg))
+                            }
+                        }
+                    }
+                }
+            }
+            S.addClause(Clause(finalClause))
+        }
+        var isSAT = true
+        while(isSAT){
+            isSAT = S.solve()
+            //println(isSAT)
+            var resultMap : Map[Variable, Boolean] = Map.empty
+            if (isSAT){
+                for(x <- allVariables){
+                    resultMap = resultMap + (x -> S.modelValue(Literal.create(mapVarToInt(x))))
+                }
+            }
+            allSAT = allSAT :+ resultMap
+            
+            var tempClause : List[Literal] = List.empty
+            for (a <- allVariables){
+                if(S.modelValue(Literal.create(mapVarToInt(a)))){
+                    tempClause = tempClause :+ Literal.create(mapVarToInt(a))
+                }else{
+                    tempClause = tempClause :+ ~Literal.create(mapVarToInt(a))
+                    
+                }
+            }
+            S.addClause(Clause(tempClause))
+        }
+        println(allSAT.length)
+        f1
     }
 
 

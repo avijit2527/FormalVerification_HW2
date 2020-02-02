@@ -13,10 +13,10 @@ object Main {
         def c = var_("c")
         def d = var_("d")
 
-        val exp1 = and(a,b)
+        val exp1 = or(lit(true))
         val exp2 = not(or(not(a), not(b)))
         Evaluation.areEquivalent(not(c), not(d))
-        assert(Evaluation.areEquivalent(exp1, exp2) == true)
+        assert(Evaluation.areEquivalent(exp1, exp1) == true)
         assert(Evaluation.areEquivalent(exp1, not(exp2)) == false)
 
         val exp3 = and(a,b,c,d)
@@ -63,10 +63,9 @@ object Main {
     def main(args: Array[String])
     {
         //testSolver
-        //testCheckEquivUsingSat
         // uncomment following to run corresponding sample tests
-         testEquivalence
-        // Firewall.test1()
-        // CircuitTest.sampleTest
+       testEquivalence
+         //Firewall.test1()
+         CircuitTest.sampleTest
     }
 }
