@@ -2,7 +2,7 @@
 
 
 object CNFConverter{
-    var countVariable = 0
+    var countVariable = 1
     var allClauses : List[Expr] = List.empty
     
     
@@ -147,11 +147,12 @@ object CNFConverter{
         
         retVariable
     }
-    def toCNF(e : Expr) : List[Expr] = {
+    def toCNF(e : Expr, countVar : Int) : (List[Expr], Int) = {
+        countVariable = countVar
         allClauses = List.empty
         var result = toConjunction(e)
         allClauses = allClauses :+ Or(List(result))
-        allClauses
+        (allClauses,countVariable)
     }
     
 }

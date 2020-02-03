@@ -27,25 +27,46 @@ object Circuit
         
         result
     }
+    var totalTime = 0.0
+    var totalCount = 0
     
-    def solveEquation(e: Expr) : Map[Variable, Boolean] = {
+    
+    
+    def solveEquation(e: Expr, allVariables : Set[Variable], initialVariables : Set[Variable], mapVarToInt : HashMap[Expr,Int]) : Map[Variable, Boolean] = {
+        val start = System.nanoTime()
         var resultMap : Map[Variable, Boolean] = Map.empty
         val simlifiedEvalutateExpr = CNFConverter.simplify(e)
-        val allClauses = CNFConverter.toCNF(simlifiedEvalutateExpr)
-        val allVariables = Evaluation.getAllVariables(And(allClauses)) ++ Evaluation.getAllVariables(e)
+        
+        val allClauses = CNFConverter.toCNF(simlifiedEvalutateExpr,1)._1
+        //val allVariables = Evaluation.getAllVariables(And(allClauses)) ++ Evaluation.getAllVariables(e)
+        
+        
+        val end = System.nanoTime()
+        totalCount += 1
+        totalTime += ((end -start)/1000000)
+        println(totalTime/totalCount)
+        
+        
+        
         if (simlifiedEvalutateExpr == BoolLit(false)){
+            for(x <- initialVariables){
+                resultMap = resultMap + (x -> true)
+            }
             return resultMap
         }
         if (simlifiedEvalutateExpr == BoolLit(true)){
+            for(x <- initialVariables){
+                resultMap = resultMap + (x -> true)
+            }
             return resultMap
         }
 
-        var mapVarToInt : HashMap[Expr,Int] = HashMap.empty
+       /* var mapVarToInt : HashMap[Expr,Int] = HashMap.empty
         var varCount = 1
         for (variables <- allVariables){
             mapVarToInt += (variables -> varCount)
             varCount += 1
-        }
+        }*/
         val S = new Solver()
         for (clause <- allClauses){
             var finalClause : List[Literal] = List.empty
@@ -54,6 +75,7 @@ object Circuit
                     for(arg <- args){
                         arg match {
                             case Not(value) => {
+                            //println(value,mapVarToInt(value))
                                 finalClause = finalClause :+ ~Literal.create(mapVarToInt(value))
                             }
                             case _ => {
@@ -66,13 +88,14 @@ object Circuit
             S.addClause(Clause(finalClause))
         }
         val isSAT = S.solve()
+        //println("here")
+        //println(allVariables)
         if (isSAT){
-            for(x <- allVariables){
+            for(x <- initialVariables){
                 resultMap = resultMap + (x -> S.modelValue(Literal.create(mapVarToInt(x))))
             }
         }
-        
-        
+         
         resultMap
     }
     
@@ -110,6 +133,26 @@ object Circuit
             }
         }
     }
+    
+    def createAllVariables(initialVariables : Set[Variable]) : (Set[Variable],HashMap[Expr,Int]) = {
+    
+        var mapVarToInt : HashMap[Expr,Int] = HashMap.empty
+        var retval : Set[Variable] = Set.empty
+        var count = 1
+        for (x <- initialVariables){
+            mapVarToInt += (x -> count)
+            //println(mapVarToInt(x))
+            count += 1
+        }
+        for (i <- 1 until 20000){
+            var tempVar = Variable("new" + i.toString())
+            retval += tempVar
+            mapVarToInt += (tempVar -> count)
+            count += 1
+        }
+        //println(mapVarToInt)
+        (retval,mapVarToInt)
+    }
 
     def checkEquivalenceOfCircuits(actualCircuit: Expr, givenCircuitEval: (Map[Variable, Boolean]) => Option[Boolean]): Boolean =
     {
@@ -129,22 +172,49 @@ object Circuit
         //REPLACE THE CODE BELOW WITH YOUR IMPLEMENTATION     //
         ////////////////////////////////////////////////////////
         var noOfAnds = countNumOfAnds(actualCircuit)
+        val initialVariables = Evaluation.getAllVariables(actualCircuit)
         //println(noOfAnds)
+        val varsAndMap = createAllVariables(initialVariables)
+        val allVariables = varsAndMap._1 ++ initialVariables
+        val mapVarToInt = varsAndMap._2
+        val retFromToCNFActual = CNFConverter.toCNF(actualCircuit,1)
+        val actualCircuitCNF = retFromToCNFActual._1
+        val newVarCountActual = retFromToCNFActual._2
+       
   
         for(a <- 0 until noOfAnds){
+            var allClauses : List[Expr] = actualCircuitCNF
             val S = new Solver()
             count = 0
             var tempCircuit = getChangedCircuit(actualCircuit,a)
-            //println(a)
-            //println(noOfAnds)
-            //println(actualCircuit)
-            //println(tempCircuit)
-            var tempAssignment = solveEquation(And(List(tempCircuit,Not(actualCircuit))))
-            if(givenCircuitEval(tempAssignment).getOrElse(true)){
-                return false
+    //        println(a)
+        //    println(noOfAnds)
+        //    println(actualCircuit)
+          //  println(tempCircuit)
+            val retFromToCNFtemp = CNFConverter.toCNF(tempCircuit,newVarCountActual)
+            val tempCircuitCNF = retFromToCNFtemp._1
+            val newVarCountTemp = retFromToCNFtemp._2
+            allClauses = allClauses ++ tempCircuitCNF
+            
+            var tempAssignment = solveEquation(And(List(tempCircuit,Not(actualCircuit))),allVariables,initialVariables,mapVarToInt)
+            //println(tempAssignment)
+            var tempCircuitVal = givenCircuitEval(tempAssignment)
+            if(tempCircuitVal != None){
+                if(tempCircuitVal.get){
+                    return false
+                }
+            }else{
+                var tempAssignmentOpposite = solveEquation(And(List(Not(tempCircuit),actualCircuit)),allVariables,initialVariables,mapVarToInt)
+                var tempCircuitValOpposite = givenCircuitEval(tempAssignmentOpposite)
+                if(tempCircuitValOpposite != None){
+                    if(!tempCircuitValOpposite.get){
+                        return false
+                    }
+                }
+            
             }
         }
-        
+        println(totalCount)
         true
 
     }

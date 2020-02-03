@@ -77,7 +77,7 @@ object Firewall {
         val expr2 = firewall2BoolFcn(f2)
         val finalExpr = And(List(expr1,Not(expr2))) 
         val simlifiedFinalExpr = CNFConverter.simplify(finalExpr)
-        val allClauses = CNFConverter.toCNF(simlifiedFinalExpr)
+        val allClauses = CNFConverter.toCNF(simlifiedFinalExpr,1)._1
         val allVariables = getAllVariables(And(allClauses))
         var mapVarToInt : HashMap[Expr,Int] = HashMap.empty
         var varCount = 1
