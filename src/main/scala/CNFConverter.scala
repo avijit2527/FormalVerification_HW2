@@ -101,9 +101,16 @@ object CNFConverter{
     def toConjunction(e : Expr) : Literal = {
         var retVariable : Literal = e match {
             case Variable(name) => {
+                var cacheLiteral = mapVarToInt.get(Variable(name))
                 var tempLiteral = Literal.create(countVariable)
-                mapVarToInt += (Variable(name) -> countVariable)
-                countVariable += 1
+                if(cacheLiteral == None){
+                    mapVarToInt += (Variable(name) -> countVariable)
+                    tempLiteral = Literal.create(countVariable)
+                    //println((Variable(name) , countVariable))
+                    countVariable += 1
+                }else{
+                    tempLiteral = Literal.create(cacheLiteral.get)
+                }
                 tempLiteral
             }
             case And(args) => {

@@ -65,7 +65,7 @@ object Main {
         //testSolver
         // uncomment following to run corresponding sample tests
        testEquivalence
-         //Firewall.test1()
-         CircuitTest.sampleTest
+         Firewall.test1()
+         //CircuitTest.sampleTest
     }
 }

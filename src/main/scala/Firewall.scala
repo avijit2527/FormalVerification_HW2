@@ -1,5 +1,7 @@
 import scala.collection.mutable.HashMap
 
+import scala.util.control.Breaks._
+
 
 case class CIDR(A: Int, B: Int, C: Int, D: Int, n: Int) {
 
@@ -41,11 +43,13 @@ object Firewall {
         var finalExpressionList : List[Expr] = List.empty
 
         for(cidr <- cidrs){
+            //println(cidr,cidr.toBooleanExpr(variableList))
             finalExpressionList = finalExpressionList :+ cidr.toBooleanExpr(variableList)
         }
         Or(finalExpressionList)
     }
     
+    def bool2int(b:Boolean) = if (b) 1 else 0
         
     def getAllVariables(e: Expr) : Set[Variable] = {
         e match {
@@ -58,7 +62,19 @@ object Firewall {
         }
     }
 
-    
+    def toFirewallFormat(resultMap : Map[Variable, Boolean], subnetMask : Int) : CIDR = {
+        var resultString = ""
+        for(a <- 31 until subnetMask by -1){
+            resultString += (bool2int(resultMap(Variable("c" + a.toString))).toString)
+        }
+        for(a<- subnetMask to 0 by -1){
+            resultString += 0.toString
+        }
+        //println(Integer.parseInt(resultString.slice(0,8), 2))
+        
+        
+        CIDR(Integer.parseInt(resultString.slice(0,8), 2),Integer.parseInt(resultString.slice(8,16), 2),Integer.parseInt(resultString.slice(16,24), 2),Integer.parseInt(resultString.slice(24,32), 2),31 - subnetMask)
+    }
     
     
 
@@ -73,7 +89,62 @@ object Firewall {
         // * you may write helper functions for your convenience            //
         //////////////////////////////////////////////////////////////////////
 
-        f1
+
+        var differenceFirewall : Array[CIDR] = Array()
+        val expr1 = firewall2BoolFcn(f1)
+        val expr2 = firewall2BoolFcn(f2)
+        val finalExpr = And(List(expr1,Not(expr2))) 
+        val simlifiedFinalExpr = Evaluation.simplify(finalExpr)
+        val (allClauses,countVariable,mapVarToInt) = CNFConverter.toCNF(simlifiedFinalExpr,1)
+        var resultMap : Map[Variable, Boolean] = Map.empty
+        
+        val S = new Solver()
+        for(clause <- allClauses){
+            S.addClause(clause)
+        }
+        
+        var isSAT = true
+        while(isSAT){
+            isSAT = S.solve()
+            if (isSAT){
+                for((x,y) <- mapVarToInt){
+                    resultMap = resultMap + (x -> S.modelValue(y))
+                }
+            }
+        
+            var subnetCount = 0
+            breakable{
+                for(variable <- variableList){
+                    if(Evaluation.evaluate(finalExpr,resultMap + (variable -> true)) == Evaluation.evaluate(finalExpr,resultMap + (variable -> false))){
+                        subnetCount += 1
+                    }else{
+                        break
+                    }
+                }
+            }
+            
+            subnetCount -= 1
+            var resultingFirewall = toFirewallFormat(resultMap, subnetCount)
+            //println("----------")
+            //println(subnetCount)
+            //println(resultMap)
+            //println(resultingFirewall)
+            //println("----------")
+            differenceFirewall = differenceFirewall :+ resultingFirewall
+            var blockingClause : List[Literal] = List.empty
+            for(a <- subnetCount + 1 until 32){
+                val tempLookup = Variable("c" + a.toString)
+                if(S.modelValue(mapVarToInt(tempLookup))){
+                    blockingClause = blockingClause :+ ~Literal.create(mapVarToInt(tempLookup))
+                }else{
+                    blockingClause = blockingClause :+ Literal.create(mapVarToInt(tempLookup))
+                }
+            }
+            S.addClause(Clause(blockingClause))
+            //println(31 - subnetCount)
+            isSAT = S.solve()
+        }
+        differenceFirewall
     }
 
 
