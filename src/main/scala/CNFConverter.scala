@@ -1,9 +1,10 @@
-
+import scala.collection.mutable.HashMap
 
 
 object CNFConverter{
     var countVariable = 1
-    var allClauses : List[Expr] = List.empty
+    var allClauses : List[Clause] = List.empty
+    var mapVarToInt : HashMap[Variable,Int] = HashMap.empty
     
     
 
@@ -97,62 +98,71 @@ object CNFConverter{
     
     
     
-    def toConjunction(e : Expr) : Expr = {
-        var retVariable : Expr = e match {
-            case BoolLit(value) => BoolLit(value)
-            case Variable(name) => Variable(name)
+    def toConjunction(e : Expr) : Literal = {
+        var retVariable : Literal = e match {
+            case Variable(name) => {
+                var tempLiteral = Literal.create(countVariable)
+                mapVarToInt += (Variable(name) -> countVariable)
+                countVariable += 1
+                tempLiteral
+            }
             case And(args) => {
-                var temp : List[Expr] = List.empty
-                var finalClauseArg : List[Expr] = List.empty
-                var newVar : Variable = Variable("new" + countVariable.toString)
+                var temp : List[Literal] = List.empty
+                var finalClauseArg : List[Literal] = List.empty
+                var newVar : Literal = Literal.create(countVariable)
                 countVariable += 1
                 for(arg <- args){
                     var gateVar = toConjunction(arg)
                     temp = temp :+ gateVar
-                    finalClauseArg = finalClauseArg :+ Not(gateVar)
+                    finalClauseArg = finalClauseArg :+ ~gateVar
                 }
                 finalClauseArg = finalClauseArg :+ newVar
                 for(tempVar <- temp){
-                    allClauses = allClauses :+ Or(List(Not(newVar),tempVar))
+                    allClauses = allClauses :+ Clause(List(~newVar,tempVar))
                 }
-                allClauses = allClauses :+ Or(finalClauseArg)
+                allClauses = allClauses :+ Clause(finalClauseArg)
                 newVar
             }
             case Or(args) => {
-                var temp : List[Expr] = List.empty
-                var finalClauseArg : List[Expr] = List.empty
-                var newVar : Variable = Variable("new" + countVariable.toString)
+                var temp : List[Literal] = List.empty
+                var finalClauseArg : List[Literal] = List.empty
+                var newVar : Literal = Literal.create(countVariable)
                 countVariable += 1
                 for(arg <- args){
                     var gateVar = toConjunction(arg)
                     temp = temp :+ gateVar
                     finalClauseArg = finalClauseArg :+ gateVar
                 }
-                finalClauseArg = finalClauseArg :+ Not(newVar)
+                finalClauseArg = finalClauseArg :+ ~newVar
                 for(tempVar <- temp){
-                    allClauses = allClauses :+ Or(List(newVar,Not(tempVar)))
+                    allClauses = allClauses :+ Clause(List(newVar,~tempVar))
                 }
-                allClauses = allClauses :+ Or(finalClauseArg)
+                allClauses = allClauses :+ Clause(finalClauseArg)
                 newVar
             }
             case Not(arg) => {
-                var newVar : Variable = Variable("new" + countVariable.toString)
+                var newVar : Literal = Literal.create(countVariable)
                 countVariable += 1
                 var gateVar = toConjunction(arg)
-                allClauses = allClauses :+ Or(List(Not(newVar),Not(gateVar)))
-                allClauses = allClauses :+ Or(List(newVar,gateVar))
+                allClauses = allClauses :+ Clause(List(~newVar,~gateVar))
+                allClauses = allClauses :+ Clause(List(newVar,gateVar))
                 newVar
             }
         }
         
         retVariable
     }
-    def toCNF(e : Expr, countVar : Int) : (List[Expr], Int) = {
+    def toCNF(e : Expr, countVar : Int) : (List[Clause], Int, HashMap[Variable,Int]) = {
+        mapVarToInt = HashMap.empty
         countVariable = countVar
         allClauses = List.empty
         var result = toConjunction(e)
-        allClauses = allClauses :+ Or(List(result))
-        (allClauses,countVariable)
+        allClauses = allClauses :+ Clause(List(result))
+        (allClauses,countVariable,mapVarToInt)
     }
+    
+    
+    
+    
     
 }

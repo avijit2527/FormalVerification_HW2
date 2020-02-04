@@ -154,51 +154,31 @@ object Evaluation {
 
         val evalutateExpr = And(List(Or(List(Not(e1),Not(e2))),Or(List(e1,e2))))
         val simlifiedEvalutateExpr = simplify(evalutateExpr)
-        val allClauses = CNFConverter.toCNF(simlifiedEvalutateExpr,1)._1
-        val allVariables = getAllVariables(And(allClauses)) ++ getAllVariables(evalutateExpr)
-
-
-        //println(simlifiedEvalutateExpr)
-        if (simlifiedEvalutateExpr == BoolLit(false)){
-            return (true,Some(resultMap))
-        }
-        if (simlifiedEvalutateExpr == BoolLit(true)){
+        if(simlifiedEvalutateExpr == BoolLit(false)){
+            val allVariables = getAllVariables(e1) ++ getAllVariables(e2)
             for(x <- allVariables){
                 resultMap = resultMap + (x -> true)
             }
-            return (false,Some(resultMap))
+            return (true, Some(resultMap))
         }
-
-        var mapVarToInt : HashMap[Expr,Int] = HashMap.empty
-        var varCount = 1
-        for (variables <- allVariables){
-            mapVarToInt += (variables -> varCount)
-            varCount += 1
-        }
-        val S = new Solver()
-        for (clause <- allClauses){
-            var finalClause : List[Literal] = List.empty
-            clause match {
-                case Or(args) => {
-                    for(arg <- args){
-                        arg match {
-                            case Not(value) => {
-                                finalClause = finalClause :+ ~Literal.create(mapVarToInt(value))
-                            }
-                            case _ => {
-                                finalClause = finalClause :+ Literal.create(mapVarToInt(arg))
-                            }
-                        }
-                    }
-                }
-            }
-            S.addClause(Clause(finalClause))
-        }
-        val isSAT = S.solve()
-        //var resultMap : Map[Variable, Boolean] = Map.empty
-        if (isSAT){
+        if(simlifiedEvalutateExpr == BoolLit(true)){
+            val allVariables = getAllVariables(e1) ++ getAllVariables(e2)
             for(x <- allVariables){
-                resultMap = resultMap + (x -> S.modelValue(Literal.create(mapVarToInt(x))))
+                resultMap = resultMap + (x -> true)
+            }
+            return (false, Some(resultMap))
+        }
+        val (allClauses,countVariable,mapVarToInt) = CNFConverter.toCNF(simlifiedEvalutateExpr,1)
+       
+        val S = new Solver()
+        for(clause <- allClauses){
+            S.addClause(clause)
+        }
+        
+        val isSAT = S.solve()
+        if (isSAT){
+            for((x,y) <- mapVarToInt){
+                resultMap = resultMap + (x -> S.modelValue(Literal.create(y)))
             }
         }
         
