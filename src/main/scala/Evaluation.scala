@@ -153,7 +153,7 @@ object Evaluation {
         var resultMap : Map[Variable, Boolean] = Map.empty
 
         val evalutateExpr = And(List(Or(List(Not(e1),Not(e2))),Or(List(e1,e2))))
-        val simlifiedEvalutateExpr = CNFConverter.simplify(evalutateExpr)
+        val simlifiedEvalutateExpr = simplify(evalutateExpr)
         val allClauses = CNFConverter.toCNF(simlifiedEvalutateExpr,1)._1
         val allVariables = getAllVariables(And(allClauses)) ++ getAllVariables(evalutateExpr)
 
