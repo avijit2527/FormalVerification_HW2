@@ -1,5 +1,6 @@
 import scala.collection.mutable.HashMap
 import scala.util.control.Breaks._
+import scala.collection.mutable.ListBuffer
 
 
 
@@ -95,71 +96,169 @@ object Circuit
         
     }
    
+   
+   
+   
+   
+   
+   
+   
+    var allClausesOriginal : List[Clause] = List.empty
+   
+   
+   
+   
+      
+    
+    def createOriginalCircuit(e : Expr) : Literal = {
+        var retVariable : Literal = e match {
+            case Variable(name) => {
+                var cacheLiteral = mapVarToInt.get(Variable(name))
+                var tempLiteral = Literal.create(cacheLiteral.get)
+               
+                tempLiteral
+            }
+            case And(args) => {
+                var temp : List[Literal] = List.empty
+                var finalClauseArg : List[Literal] = List.empty
+                var newVar : Literal = Literal.create(countVariable)
+                countVariable += 1
+                for(arg <- args){
+                    var gateVar = createOriginalCircuit(arg)
+                    temp = temp :+ gateVar
+                    finalClauseArg = finalClauseArg :+ ~gateVar
+                }
+                finalClauseArg = finalClauseArg :+ newVar
+                for(tempVar <- temp){
+                    allClausesOriginal = allClausesOriginal :+ Clause(List(~newVar,tempVar))
+                }
+                allClausesOriginal = allClausesOriginal :+ Clause(finalClauseArg)
+                newVar
+            }
+            case Or(args) => {
+                var temp : List[Literal] = List.empty
+                var finalClauseArg : List[Literal] = List.empty
+                var newVar : Literal = Literal.create(countVariable)
+                countVariable += 1
+                for(arg <- args){
+                    var gateVar = createOriginalCircuit(arg)
+                    temp = temp :+ gateVar
+                    finalClauseArg = finalClauseArg :+ gateVar
+                }
+                finalClauseArg = finalClauseArg :+ ~newVar
+                for(tempVar <- temp){
+                    allClausesOriginal = allClausesOriginal :+ Clause(List(newVar,~tempVar))
+                }
+                allClausesOriginal = allClausesOriginal :+ Clause(finalClauseArg)
+                newVar
+            }
+            case Not(arg) => {
+                var newVar : Literal = Literal.create(countVariable)
+                countVariable += 1
+                var gateVar = createOriginalCircuit(arg)
+                allClausesOriginal = allClausesOriginal :+ Clause(List(~newVar,~gateVar))
+                allClausesOriginal = allClausesOriginal :+ Clause(List(newVar,gateVar))
+                newVar
+            }
+        }
+        
+        retVariable
+    }
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
     def checkEquivalenceOfCircuits(actualCircuit: Expr, givenCircuitEval: (Map[Variable, Boolean]) => Option[Boolean]): Boolean =
     {
-
-        var fianlVariable = createMasterCircuit(actualCircuit)
-        allClauses = allClauses :+ Clause(List(fianlVariable))
-        println(selectVariables)
-        
-        val S1 = new Solver()
-        for(clause <- allClauses){
-            S1.addClause(clause)
-        }
+        countVariable = 1
+        mapVarToInt = HashMap.empty
+        allClauses = List.empty
+        selectVariables = List.empty
+        allClausesOriginal = List.empty
         
         
+        
+        var duplicateVariable = createMasterCircuit(actualCircuit)
+        var originalCircuitVariable = createOriginalCircuit(actualCircuit)
+        //println(duplicateVariable,originalCircuitVariable,countVariable)
+        
+        var tempXorClauses = allClauses ++ allClausesOriginal
+        
+        println(selectVariables.length)
         for(selectVariable <- selectVariables){
-            S1.addClause(Clause(List(~selectVariable)))
-        }
-        
-        var isSAT = S1.solve()
-        for(selectVariable <- selectVariables){
-            val S2 = new Solver()
-            for(clause <- allClauses){
-                S2.addClause(clause)
-            }
-        
-        
+            var xorClauses = tempXorClauses
             for(tempSelectVariable <- selectVariables){
                 if(tempSelectVariable == selectVariable){
-                    S2.addClause(Clause(List(tempSelectVariable)))
+                    xorClauses = xorClauses :+ Clause(List(tempSelectVariable))
                 }else{
-                    S2.addClause(Clause(List(~tempSelectVariable)))
+                    xorClauses = xorClauses :+ Clause(List(~tempSelectVariable))
                 }
             }
             
-            var isSATS2 = S2.solve()
+            var newVar1 : Literal = Literal.create(countVariable)
+            countVariable += 1
+            xorClauses = xorClauses :+ Clause(List(~newVar1,~originalCircuitVariable))
+            xorClauses = xorClauses :+ Clause(List(newVar1,originalCircuitVariable))
             
-            breakable{
-                while(isSATS2){
-                    var blockingClause : List[Literal] = List.empty
-                    var tempAssignment : Map[Variable,Boolean] = Map.empty
-                    for((a,b) <- mapVarToInt){
-                        tempAssignment = tempAssignment + (a -> S2.modelValue(b))
-                        if(S2.modelValue(b)){
-                            blockingClause = blockingClause :+ ~Literal.create(b)
-                        }else{
-                            blockingClause = blockingClause :+ Literal.create(b)
-                        }
-                    }
-                    if(!Evaluation.evaluate(actualCircuit,tempAssignment).get){
-                        if(givenCircuitEval(tempAssignment).get)
-                            return false
-                    }
-                        S2.addClause(Clause(blockingClause))
-                        //println(tempAssignment)  
-                        //println(Evaluation.evaluate(actualCircuit,tempAssignment))
-                        //println(S.modelValue(fianlVariable))
-                        isSATS2 = S2.solve()
-                        
-                    }
+            var newVar2 : Literal = Literal.create(countVariable)
+            countVariable += 1
+            xorClauses = xorClauses :+ Clause(List(~newVar2,newVar1))
+            xorClauses = xorClauses :+ Clause(List(~newVar2,duplicateVariable))
+            xorClauses = xorClauses :+ Clause(List(newVar2,~duplicateVariable,~newVar1))
+            
+            var newVar3 : Literal = Literal.create(countVariable)
+            countVariable += 1
+            xorClauses = xorClauses :+ Clause(List(~newVar3,~duplicateVariable))
+            xorClauses = xorClauses :+ Clause(List(newVar3,duplicateVariable))
+              
+            var newVar4 : Literal = Literal.create(countVariable)
+            countVariable += 1
+            xorClauses = xorClauses :+ Clause(List(~newVar4,newVar3))
+            xorClauses = xorClauses :+ Clause(List(~newVar4,originalCircuitVariable))
+            xorClauses = xorClauses :+ Clause(List(newVar4,~originalCircuitVariable,~newVar3))
+            
+            
+            
+            var newVar5 : Literal = Literal.create(countVariable)
+            countVariable += 1
+            xorClauses = xorClauses :+ Clause(List(~newVar2,newVar5))
+            xorClauses = xorClauses :+ Clause(List(~newVar4,newVar5))
+            xorClauses = xorClauses :+ Clause(List(newVar2,newVar4,~newVar5))
+            xorClauses = xorClauses :+ Clause(List(newVar5))
+            
+            
+            //println(xorClauses)
+            val S = new Solver()
+            for(clause <- xorClauses){
+                S.addClause(clause)
+            }
+            val isSAT = S.solve()
+            var resultMap : Map[Variable, Boolean] = Map.empty
+            if (isSAT){
+                for((x,y) <- mapVarToInt){
+                    resultMap = resultMap + (x -> S.modelValue(y))
                 }
             }
-        
-        println(isSAT)
-        
-        
-        
+            if(Evaluation.evaluate(actualCircuit, resultMap) != givenCircuitEval(resultMap)){
+                return false
+            }
+            
+        }
         
         true
     }
