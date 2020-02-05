@@ -95,6 +95,9 @@ object Firewall {
         val expr2 = firewall2BoolFcn(f2)
         val finalExpr = And(List(expr1,Not(expr2))) 
         val simlifiedFinalExpr = Evaluation.simplify(finalExpr)
+        if(simlifiedFinalExpr == BoolLit(false)){
+            return differenceFirewall
+        }
         val (allClauses,countVariable,mapVarToInt) = CNFConverter.toCNF(simlifiedFinalExpr,1)
         var resultMap : Map[Variable, Boolean] = Map.empty
         

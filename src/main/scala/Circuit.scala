@@ -1,269 +1,167 @@
 import scala.collection.mutable.HashMap
+import scala.util.control.Breaks._
+
 
 
 object Circuit
 {
     var countVariable = 1
-    var allClauses : List[Expr] = List.empty
-    
-   
-    def toConjunction(e : Expr) : Expr = {
-        var retVariable : Expr = e match {
-            case BoolLit(value) => BoolLit(value)
-            case Variable(name) => Variable(name)
+    var allClauses : List[Clause] = List.empty
+    var mapVarToInt : HashMap[Variable,Int] = HashMap.empty
+    var selectVariables : List[Literal] = List.empty
+
+
+
+    def createMasterCircuit(e : Expr) : Literal = {
+        var retVariable : Literal = e match {
+            case Variable(name) => {
+                var cacheLiteral = mapVarToInt.get(Variable(name))
+                var tempLiteral = Literal.create(countVariable)
+                if(cacheLiteral == None){
+                    mapVarToInt += (Variable(name) -> countVariable)
+                    tempLiteral = Literal.create(countVariable)
+                    countVariable += 1
+                }else{
+                    tempLiteral = Literal.create(cacheLiteral.get)
+                }
+                tempLiteral
+            }
             case And(args) => {
-                var temp : List[Expr] = List.empty
-                var finalClauseArg : List[Expr] = List.empty
-                var newVar : Variable = Variable("new" + countVariable.toString)
+                var tempInputs : List[Literal] = List.empty
+                var finalClauseArgAnd : List[Literal] = List.empty
+                var finalClauseArgOr : List[Literal] = List.empty
+                var newVarAnd : Literal = Literal.create(countVariable)
+                countVariable += 1
+                var newVarOr : Literal = Literal.create(countVariable)
                 countVariable += 1
                 for(arg <- args){
-                    var gateVar = toConjunction(arg)
-                    temp = temp :+ gateVar
-                    finalClauseArg = finalClauseArg :+ Not(gateVar)
+                    var gateVar = createMasterCircuit(arg)
+                    tempInputs = tempInputs :+ gateVar
+                    finalClauseArgAnd = finalClauseArgAnd :+ ~gateVar
+                    finalClauseArgOr = finalClauseArgOr :+ gateVar
                 }
-                finalClauseArg = finalClauseArg :+ newVar
-                for(tempVar <- temp){
-                    allClauses = allClauses :+ Or(List(Not(newVar),tempVar))
+                finalClauseArgAnd = finalClauseArgAnd :+ newVarAnd
+                finalClauseArgOr = finalClauseArgOr :+ ~newVarOr
+                for(tempVar <- tempInputs){
+                    allClauses = allClauses :+ Clause(List(~newVarAnd,tempVar))
+                    allClauses = allClauses :+ Clause(List(newVarOr,~tempVar))
                 }
-                allClauses = allClauses :+ Or(finalClauseArg)
-                newVar
+                allClauses = allClauses :+ Clause(finalClauseArgAnd)
+                allClauses = allClauses :+ Clause(finalClauseArgOr)
+                
+                
+                var selectVar : Literal = Literal.create(countVariable)
+                countVariable += 1
+                selectVariables = selectVariables :+ selectVar
+                var outputVar : Literal = Literal.create(countVariable)
+                countVariable += 1
+                
+                allClauses = allClauses :+ Clause(List(selectVar,newVarAnd,~outputVar))
+                allClauses = allClauses :+ Clause(List(selectVar,~newVarAnd,outputVar))
+                allClauses = allClauses :+ Clause(List(~selectVar,newVarOr,~outputVar))
+                allClauses = allClauses :+ Clause(List(~selectVar,~newVarOr,outputVar))
+                
+                outputVar
+
             }
             case Or(args) => {
-                var temp : List[Expr] = List.empty
-                var finalClauseArg : List[Expr] = List.empty
-                var newVar : Variable = Variable("new" + countVariable.toString)
+                var temp : List[Literal] = List.empty
+                var finalClauseArg : List[Literal] = List.empty
+                var newVar : Literal = Literal.create(countVariable)
                 countVariable += 1
                 for(arg <- args){
-                    var gateVar = toConjunction(arg)
+                    var gateVar = createMasterCircuit(arg)
                     temp = temp :+ gateVar
                     finalClauseArg = finalClauseArg :+ gateVar
                 }
-                finalClauseArg = finalClauseArg :+ Not(newVar)
+                finalClauseArg = finalClauseArg :+ ~newVar
                 for(tempVar <- temp){
-                    allClauses = allClauses :+ Or(List(newVar,Not(tempVar)))
+                    allClauses = allClauses :+ Clause(List(newVar,~tempVar))
                 }
-                allClauses = allClauses :+ Or(finalClauseArg)
+                allClauses = allClauses :+ Clause(finalClauseArg)
                 newVar
             }
             case Not(arg) => {
-                var newVar : Variable = Variable("new" + countVariable.toString)
+                var newVar : Literal = Literal.create(countVariable)
                 countVariable += 1
-                var gateVar = toConjunction(arg)
-                allClauses = allClauses :+ Or(List(Not(newVar),Not(gateVar)))
-                allClauses = allClauses :+ Or(List(newVar,gateVar))
+                var gateVar = createMasterCircuit(arg)
+                allClauses = allClauses :+ Clause(List(~newVar,~gateVar))
+                allClauses = allClauses :+ Clause(List(newVar,gateVar))
                 newVar
             }
         }
         
         retVariable
+        
     }
-    def toCNF(e : Expr, countVar : Int) : (List[Expr], Int, Expr) = {
-        countVariable = countVar
-        allClauses = List.empty
-        var result = toConjunction(e)
-        (allClauses,countVariable,result)
-    }
-    
-    def countNumOfAnds(e: Expr): Int = {
-        var result = 0
-        e match {
-            case And(args) => {
-                var count = 0
-                for (a <- args){
-                    count = count + countNumOfAnds(a)
-                }
-                return count + 1
-            }
-            case Or(args) => {
-                var count = 0
-                for (a <- args){
-                    count = count + countNumOfAnds(a)
-                }
-                return count
-            }
-            case Not(arg) => return countNumOfAnds(arg)
-            case _ => return 0
-        }
-        
-        result
-    }
-    var totalTime = 0.0
-    var totalCount = 0
-    
-    
-    
-    def solveEquation(e: Expr, allVariables : Set[Variable], initialVariables : Set[Variable], mapVarToInt : HashMap[Expr,Int], solveAllClauses : List[Expr]) : Map[Variable, Boolean] = {
-        var resultMap : Map[Variable, Boolean] = Map.empty
-        val simlifiedEvalutateExpr = Evaluation.simplify(e)  
-        
-        
-        
-       
-       
-        if (simlifiedEvalutateExpr == BoolLit(false)){
-            for(x <- initialVariables){
-                resultMap = resultMap + (x -> true)
-            }
-            return resultMap
-        }
-        if (simlifiedEvalutateExpr == BoolLit(true)){
-            for(x <- initialVariables){
-                resultMap = resultMap + (x -> true)
-            }
-            return resultMap
-        }
-
-        val S = new Solver()
-        for (clause <- solveAllClauses){
-            var finalClause : List[Literal] = List.empty
-            clause match {
-                case Or(args) => {
-                    for(arg <- args){
-                        arg match {
-                            case Not(value) => {
-                                finalClause = finalClause :+ ~Literal.create(mapVarToInt(value))
-                            }
-                            case _ => {
-                                finalClause = finalClause :+ Literal.create(mapVarToInt(arg))
-                            }
-                        }
-                    }
-                }
-            }
-            S.addClause(Clause(finalClause))
-        }
-        val isSAT = S.solve()
-        if (isSAT){
-            for(x <- initialVariables){
-                resultMap = resultMap + (x -> S.modelValue(Literal.create(mapVarToInt(x))))
-            }
-        }
-         
-        resultMap
-    } 
-    
    
-    var count =  0
-    
-    def getChangedCircuit(e: Expr, num : Int) : Expr = {
-        e match {
-            case BoolLit(value) => return e
-            case Variable(name) => return e
-            case And(args) => {
-                count = count + 1
-                var finalExpr = e
-                var listOfElem : List[Expr] = List.empty
-                if ((count - 1) == num){
-                    return Or(args)
-                }
-                for (arg <- args){
-                    listOfElem = listOfElem :+  getChangedCircuit(arg,num)
-                }
-                return And(listOfElem)                
-            }
-            case Or(args) => {
-                var finalExpr = e
-                var listOfElem : List[Expr] = List.empty
-                for (arg <- args){
-                    listOfElem = listOfElem :+  getChangedCircuit(arg,num)
-                }
-                return Or(listOfElem)                
-            }
-            case Not(arg) => {
-                return Not(getChangedCircuit(arg,num))              
-            }
-        }
-    }
-    
-    def createAllVariables(initialVariables : Set[Variable]) : (Set[Variable],HashMap[Expr,Int]) = {
-    
-        var mapVarToInt : HashMap[Expr,Int] = HashMap.empty
-        var retval : Set[Variable] = Set.empty
-        var xcount = 1
-        for (x <- initialVariables){
-            mapVarToInt += (x -> xcount)
-            xcount += 1
-        }
-        for (i <- 1 until 20000){
-            var tempVar = Variable("new" + i.toString())
-            retval += tempVar
-            mapVarToInt += (tempVar -> xcount)
-            xcount += 1
-        }
-        (retval,mapVarToInt)
-    }
-
     def checkEquivalenceOfCircuits(actualCircuit: Expr, givenCircuitEval: (Map[Variable, Boolean]) => Option[Boolean]): Boolean =
     {
 
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////
-        //  TODO - This function returns True if actualCircuit and the provided circuit are equivalent and      //
-        //  false if they aren't.                                                                               //
-        //  The parameter givenCircuitEval is a function which when passed an assignment to circuit variables   //
-        //  returns the output of the provided circuit which you are trying to verify. It returns None if the   //
-        //  circuit is unable to produce an output with the given assignment.                                   //
-        //  The implementation provided below will not work for any of the test cases. You have to change this  //
-        //  implementation.                                                                                     //
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        ////////////////////////////////////////////////////////
-        //THE FOLLOWING CODE IS JUST FOR ILLUSTRATION PURPOSES//
-        //REPLACE THE CODE BELOW WITH YOUR IMPLEMENTATION     //
-        ////////////////////////////////////////////////////////
-        var noOfAnds = countNumOfAnds(actualCircuit)
-        val initialVariables = Evaluation.getAllVariables(actualCircuit)
-        val varsAndMap = createAllVariables(initialVariables)
-        val allVariables = varsAndMap._1 ++ initialVariables
-        val mapVarToInt = varsAndMap._2
-        val retFromToCNFActual = toCNF(actualCircuit,1)
-        val actualCircuitCNF = retFromToCNFActual._1
-        val newVarCountActual = retFromToCNFActual._2
-        val gateActualVar = retFromToCNFActual._3
-       
-  
-        for(a <- 0 until noOfAnds){
-            var allClausesTemp : List[Expr] = actualCircuitCNF
-            val S = new Solver()
-            count = 0
-            var tempCircuit = getChangedCircuit(actualCircuit,a)
-            val (tempCircuitCNF,newVarCountTemp,gateTempVar) = toCNF(tempCircuit,newVarCountActual)
-            allClausesTemp = allClausesTemp ++ tempCircuitCNF
-            var newVar1 : Variable = Variable("new" + newVarCountTemp.toString)
-            allClausesTemp = allClausesTemp :+ Or(List(Not(newVar1),Not(gateActualVar)))
-            allClausesTemp = allClausesTemp :+ Or(List(newVar1,gateActualVar))
-            
-            var newVar2 : Variable = Variable("new" + (newVarCountTemp+1).toString)
-            allClausesTemp = allClausesTemp :+ Or(List(Not(newVar2),newVar1))
-            allClausesTemp = allClausesTemp :+ Or(List(Not(newVar2),gateTempVar))
-            allClausesTemp = allClausesTemp :+ Or(List(newVar2,Not(gateTempVar),Not(newVar1)))
-            
-            var newVar3 : Variable = Variable("new" + (newVarCountTemp+2).toString)
-            allClausesTemp = allClausesTemp :+ Or(List(Not(newVar3),Not(gateTempVar)))
-            allClausesTemp = allClausesTemp :+ Or(List(newVar3,gateTempVar))
-              
-            var newVar4 : Variable = Variable("new" + (newVarCountTemp+3).toString)
-            allClausesTemp = allClausesTemp :+ Or(List(Not(newVar4),newVar3))
-            allClausesTemp = allClausesTemp :+ Or(List(Not(newVar4),gateActualVar))
-            allClausesTemp = allClausesTemp :+ Or(List(newVar4,Not(gateActualVar),Not(newVar3)))
-            
-            
-            var newVar5 : Variable = Variable("new" + (newVarCountTemp+4).toString)
-            allClausesTemp = allClausesTemp :+ Or(List(Not(newVar2),newVar5))
-            allClausesTemp = allClausesTemp :+ Or(List(Not(newVar4),newVar5))
-            allClausesTemp = allClausesTemp :+ Or(List(newVar2,newVar4,Not(newVar5)))
-            allClausesTemp = allClausesTemp :+ Or(List(newVar5))
-            
-            
-            
-            var tempAssignment = solveEquation(Or(List(And(List(tempCircuit,Not(actualCircuit))),And(List(Not(tempCircuit),actualCircuit)))),allVariables,initialVariables,mapVarToInt,allClausesTemp)
-            var tempCircuitVal = givenCircuitEval(tempAssignment)
-            var actualCircuitEval = Evaluation.evaluate(actualCircuit,tempAssignment)
-            if(tempCircuitVal != actualCircuitEval){
-                return false
-            }
+        var fianlVariable = createMasterCircuit(actualCircuit)
+        allClauses = allClauses :+ Clause(List(fianlVariable))
+        println(selectVariables)
+        
+        val S1 = new Solver()
+        for(clause <- allClauses){
+            S1.addClause(clause)
         }
+        
+        
+        for(selectVariable <- selectVariables){
+            S1.addClause(Clause(List(~selectVariable)))
+        }
+        
+        var isSAT = S1.solve()
+        for(selectVariable <- selectVariables){
+            val S2 = new Solver()
+            for(clause <- allClauses){
+                S2.addClause(clause)
+            }
+        
+        
+            for(tempSelectVariable <- selectVariables){
+                if(tempSelectVariable == selectVariable){
+                    S2.addClause(Clause(List(tempSelectVariable)))
+                }else{
+                    S2.addClause(Clause(List(~tempSelectVariable)))
+                }
+            }
+            
+            var isSATS2 = S2.solve()
+            
+            breakable{
+                while(isSATS2){
+                    var blockingClause : List[Literal] = List.empty
+                    var tempAssignment : Map[Variable,Boolean] = Map.empty
+                    for((a,b) <- mapVarToInt){
+                        tempAssignment = tempAssignment + (a -> S2.modelValue(b))
+                        if(S2.modelValue(b)){
+                            blockingClause = blockingClause :+ ~Literal.create(b)
+                        }else{
+                            blockingClause = blockingClause :+ Literal.create(b)
+                        }
+                    }
+                    if(!Evaluation.evaluate(actualCircuit,tempAssignment).get){
+                        if(givenCircuitEval(tempAssignment).get)
+                            return false
+                    }
+                        S2.addClause(Clause(blockingClause))
+                        //println(tempAssignment)  
+                        //println(Evaluation.evaluate(actualCircuit,tempAssignment))
+                        //println(S.modelValue(fianlVariable))
+                        isSATS2 = S2.solve()
+                        
+                    }
+                }
+            }
+        
+        println(isSAT)
+        
+        
+        
+        
         true
-
     }
 
 
