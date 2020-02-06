@@ -64,16 +64,16 @@ object Firewall {
 
     def toFirewallFormat(resultMap : Map[Variable, Boolean], subnetMask : Int) : CIDR = {
         var resultString = ""
-        for(a <- 31 until subnetMask by -1){
+        for(a <- 31 to subnetMask by -1){
             resultString += (bool2int(resultMap(Variable("c" + a.toString))).toString)
         }
-        for(a<- subnetMask to 0 by -1){
+        for(a <- (subnetMask - 1) to 0 by -1){
             resultString += 0.toString
         }
         //println(Integer.parseInt(resultString.slice(0,8), 2))
         
         
-        CIDR(Integer.parseInt(resultString.slice(0,8), 2),Integer.parseInt(resultString.slice(8,16), 2),Integer.parseInt(resultString.slice(16,24), 2),Integer.parseInt(resultString.slice(24,32), 2),31 - subnetMask)
+        CIDR(Integer.parseInt(resultString.slice(0,8), 2),Integer.parseInt(resultString.slice(8,16), 2),Integer.parseInt(resultString.slice(16,24), 2),Integer.parseInt(resultString.slice(24,32), 2),32 - subnetMask)
     }
     
     
@@ -94,7 +94,8 @@ object Firewall {
         val expr1 = firewall2BoolFcn(f1)
         val expr2 = firewall2BoolFcn(f2)
         val finalExpr = And(List(expr1,Not(expr2))) 
-        val simlifiedFinalExpr = Evaluation.simplify(finalExpr)
+        //val simlifiedFinalExpr = Evaluation.simplify(finalExpr)
+        //println(finalExpr)
         if(simlifiedFinalExpr == BoolLit(false)){
             return differenceFirewall
         }
@@ -106,15 +107,16 @@ object Firewall {
             S.addClause(clause)
         }
         
-        var isSAT = true
+        var isSAT = S.solve()
         while(isSAT){
-            isSAT = S.solve()
             if (isSAT){
                 for((x,y) <- mapVarToInt){
                     resultMap = resultMap + (x -> S.modelValue(y))
                 }
             }
         
+        
+            println(resultMap)
             var subnetCount = 0
             breakable{
                 for(variable <- variableList){
@@ -125,8 +127,8 @@ object Firewall {
                     }
                 }
             }
-            
-            subnetCount -= 1
+            println(subnetCount)
+            //subnetCount -= 1
             var resultingFirewall = toFirewallFormat(resultMap, subnetCount)
             //println("----------")
             //println(subnetCount)
@@ -135,7 +137,7 @@ object Firewall {
             //println("----------")
             differenceFirewall = differenceFirewall :+ resultingFirewall
             var blockingClause : List[Literal] = List.empty
-            for(a <- subnetCount + 1 until 32){
+            for(a <- subnetCount until 32){
                 val tempLookup = Variable("c" + a.toString)
                 if(S.modelValue(mapVarToInt(tempLookup))){
                     blockingClause = blockingClause :+ ~Literal.create(mapVarToInt(tempLookup))
@@ -147,6 +149,7 @@ object Firewall {
             //println(31 - subnetCount)
             isSAT = S.solve()
         }
+        //println(Evaluation.areEquivalent(And(List(firewall2BoolFcn(differenceFirewall),expr2)),Or(List.empty[Expr])))
         differenceFirewall
     }
 
@@ -176,9 +179,9 @@ object Firewall {
             CIDR(173, 211, 0, 0, 17), CIDR(214, 180, 0, 0, 14))
 
 
-        val cubeList = firewallDifference(f1, f2)
-        val eqv = Evaluation.areEquivalent(Firewall.firewall2BoolFcn(d12), Firewall.firewall2BoolFcn(cubeList))
-        println("d12 check: " + (if(eqv) "pass" else "fail"))
+        //val cubeList = firewallDifference(f1, f2)
+        //val eqv = Evaluation.areEquivalent(Firewall.firewall2BoolFcn(d12), Firewall.firewall2BoolFcn(cubeList))
+        //println("d12 check: " + (if(eqv) "pass" else "fail"))
         // validate that each of these blocks are in f1 but not in f2
 
         val f3 = Array(CIDR(5, 176, 176, 168, 31), CIDR(6, 176, 176, 168, 31), CIDR(10, 0, 0, 0, 7),
@@ -200,9 +203,25 @@ object Firewall {
             CIDR(57, 213, 174, 96, 27), CIDR(54, 210, 0, 0, 16), CIDR(20, 165, 202, 70, 31),
             CIDR(56, 214, 175, 96, 27))
 
-        val cb2 = firewallDifference(f3, f4)
-        val eqv2 = Evaluation.areEquivalent(Firewall.firewall2BoolFcn(d34), Firewall.firewall2BoolFcn(cb2))
-        println("d34 check: " + (if(eqv2) "pass" else "fail"))
+        //val cb2 = firewallDifference(f3, f4)
+        //val eqv2 = Evaluation.areEquivalent(Firewall.firewall2BoolFcn(d34), Firewall.firewall2BoolFcn(cb2))
+        
+        //println("d34 check: " + (if(eqv2) "pass" else "fail"))
         println("=================\n")
+        
+        val f5 = Array(CIDR(29, 20, 64, 0, 14), CIDR(128, 0, 0, 0, 2), CIDR(188, 181, 231, 128, 27),
+            CIDR(188, 181, 234, 136, 32), CIDR(188, 180, 0, 0, 15))
+
+        val f6 = Array(CIDR(29, 20, 64, 0, 14), CIDR(128, 0, 0, 0, 4), CIDR(188, 181, 231, 128, 27),
+            CIDR(188, 181, 234, 136, 29), CIDR(189, 181, 231, 136, 29))
+
+        val cb3 = firewallDifference(f5, f6)
+        
+        
+        for (a <- cb3)
+            println(a)
+        
+
+        
     }
 }

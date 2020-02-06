@@ -63,11 +63,19 @@ object CircuitTest
         val exp15 = or(exp13,exp14)
         val exp16 = and(exp13,exp14)
         
-        val exp = and(exp15, exp16)
+        
+        val exp17 = or(exp15,exp16)
+        val exp18 = and(exp15,exp16)
         
         
-        val modifiedExp1 = or(exp15, exp16)
-        val modifiedExp2 = and(exp15, exp16)
+        val exp19 = or(exp17,exp18)
+        val exp20 = and(exp17,exp18)
+        
+        val exp = and(exp14, exp13)
+        
+        
+        val modifiedExp1 = or(exp14, exp13)
+        val modifiedExp2 = and(exp14, exp13)
         val modifiedExp3 = and(and(a,b),and(c,d),or(e,f),and(g,h))
         def evaluateWrapper1(m: Map[Variable, Boolean]) = Evaluation.evaluate(modifiedExp1, m)
         def evaluateWrapper2(m: Map[Variable, Boolean]) = Evaluation.evaluate(modifiedExp2, m)

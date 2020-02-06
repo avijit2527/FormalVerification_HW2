@@ -1,7 +1,5 @@
 import scala.collection.mutable.HashMap
-import scala.util.control.Breaks._
 import scala.collection.mutable.MutableList
-
 
 
 
@@ -9,12 +7,11 @@ object Circuit
 {
     var countVariable = 1
     var allClauses : MutableList[Clause] = MutableList.empty
+    
     var mapVarToInt : HashMap[Variable,Int] = HashMap.empty
-    var selectVariables : List[Literal] = List.empty
-
-
-
-    def createMasterCircuit(e : Expr) : Literal = {
+    
+   
+    def toConjunction(e : Expr) : Literal = {
         var retVariable : Literal = e match {
             case Variable(name) => {
                 var cacheLiteral = mapVarToInt.get(Variable(name))
@@ -29,42 +26,21 @@ object Circuit
                 tempLiteral
             }
             case And(args) => {
-                var tempInputs : List[Literal] = List.empty
-                var finalClauseArgAnd : List[Literal] = List.empty
-                var finalClauseArgOr : List[Literal] = List.empty
-                var newVarAnd : Literal = Literal.create(countVariable)
-                countVariable += 1
-                var newVarOr : Literal = Literal.create(countVariable)
+                var temp : List[Literal] = List.empty
+                var finalClauseArg : List[Literal] = List.empty
+                var newVar : Literal = Literal.create(countVariable)
                 countVariable += 1
                 for(arg <- args){
-                    var gateVar = createMasterCircuit(arg)
-                    tempInputs = tempInputs :+ gateVar
-                    finalClauseArgAnd = finalClauseArgAnd :+ ~gateVar
-                    finalClauseArgOr = finalClauseArgOr :+ gateVar
+                    var gateVar = toConjunction(arg)
+                    temp = temp :+ gateVar
+                    finalClauseArg = finalClauseArg :+ ~gateVar
                 }
-                finalClauseArgAnd = finalClauseArgAnd :+ newVarAnd
-                finalClauseArgOr = finalClauseArgOr :+ ~newVarOr
-                for(tempVar <- tempInputs){
-                    allClauses += Clause(List(~newVarAnd,tempVar))
-                    allClauses += Clause(List(newVarOr,~tempVar))
+                finalClauseArg = finalClauseArg :+ newVar
+                for(tempVar <- temp){
+                    allClauses += Clause(List(~newVar,tempVar))
                 }
-                allClauses += Clause(finalClauseArgAnd)
-                allClauses += Clause(finalClauseArgOr)
-                
-                
-                var selectVar : Literal = Literal.create(countVariable)
-                countVariable += 1
-                selectVariables = selectVariables :+ selectVar
-                var outputVar : Literal = Literal.create(countVariable)
-                countVariable += 1
-                
-                allClauses += Clause(List(selectVar,newVarAnd,~outputVar))
-                allClauses += Clause(List(selectVar,~newVarAnd,outputVar))
-                allClauses += Clause(List(~selectVar,newVarOr,~outputVar))
-                allClauses += Clause(List(~selectVar,~newVarOr,outputVar))
-                
-                outputVar
-
+                allClauses += Clause(finalClauseArg)
+                newVar
             }
             case Or(args) => {
                 var temp : List[Literal] = List.empty
@@ -72,7 +48,7 @@ object Circuit
                 var newVar : Literal = Literal.create(countVariable)
                 countVariable += 1
                 for(arg <- args){
-                    var gateVar = createMasterCircuit(arg)
+                    var gateVar = toConjunction(arg)
                     temp = temp :+ gateVar
                     finalClauseArg = finalClauseArg :+ gateVar
                 }
@@ -86,7 +62,7 @@ object Circuit
             case Not(arg) => {
                 var newVar : Literal = Literal.create(countVariable)
                 countVariable += 1
-                var gateVar = createMasterCircuit(arg)
+                var gateVar = toConjunction(arg)
                 allClauses += Clause(List(~newVar,~gateVar))
                 allClauses += Clause(List(newVar,gateVar))
                 newVar
@@ -94,215 +70,160 @@ object Circuit
         }
         
         retVariable
-        
     }
-   
-   
-   
-   
-   
-   
-   
-   
-    var allClausesOriginal : MutableList[Clause] = MutableList.empty
-   
-   
-   
-   
-      
+    def toCNF(e : Expr, countVar : Int) : (MutableList[Clause], Int, Literal) = {
+        mapVarToInt = HashMap.empty
+        countVariable = countVar
+        allClauses = MutableList.empty
+        var result = toConjunction(e)
+        (allClauses,countVariable,result)
+    }
     
-    def createOriginalCircuit(e : Expr) : Literal = {
-        var retVariable : Literal = e match {
-            case Variable(name) => {
-                var cacheLiteral = mapVarToInt.get(Variable(name))
-                var tempLiteral = Literal.create(cacheLiteral.get)
-               
-                tempLiteral
-            }
+    def countNumOfAnds(e: Expr): Int = {
+        var result = 0
+        e match {
             case And(args) => {
-                var temp : List[Literal] = List.empty
-                var finalClauseArg : List[Literal] = List.empty
-                var newVar : Literal = Literal.create(countVariable)
-                countVariable += 1
-                for(arg <- args){
-                    var gateVar = createOriginalCircuit(arg)
-                    temp = temp :+ gateVar
-                    finalClauseArg = finalClauseArg :+ ~gateVar
+                var count = 0
+                for (a <- args){
+                    count = count + countNumOfAnds(a)
                 }
-                finalClauseArg = finalClauseArg :+ newVar
-                for(tempVar <- temp){
-                    allClausesOriginal += Clause(List(~newVar,tempVar))
-                }
-                allClausesOriginal += Clause(finalClauseArg)
-                newVar
+                return count + 1
             }
             case Or(args) => {
-                var temp : List[Literal] = List.empty
-                var finalClauseArg : List[Literal] = List.empty
-                var newVar : Literal = Literal.create(countVariable)
-                countVariable += 1
-                for(arg <- args){
-                    var gateVar = createOriginalCircuit(arg)
-                    temp = temp :+ gateVar
-                    finalClauseArg = finalClauseArg :+ gateVar
+                var count = 0
+                for (a <- args){
+                    count = count + countNumOfAnds(a)
                 }
-                finalClauseArg = finalClauseArg :+ ~newVar
-                for(tempVar <- temp){
-                    allClausesOriginal += Clause(List(newVar,~tempVar))
-                }
-                allClausesOriginal += Clause(finalClauseArg)
-                newVar
+                return count
             }
-            case Not(arg) => {
-                var newVar : Literal = Literal.create(countVariable)
-                countVariable += 1
-                var gateVar = createOriginalCircuit(arg)
-                allClausesOriginal += Clause(List(~newVar,~gateVar))
-                allClausesOriginal += Clause(List(newVar,gateVar))
-                newVar
-            }
+            case Not(arg) => return countNumOfAnds(arg)
+            case _ => return 0
         }
         
-        retVariable
+        result
     }
-   
-   
-   
-   
-   
-   
-   
-   
-   
-   
-   
-   
-   
-   
-   
-   
-   
-   
-   
-    def checkEquivalenceOfCircuits(actualCircuit: Expr, givenCircuitEval: (Map[Variable, Boolean]) => Option[Boolean]): Boolean =
-    {
-        countVariable = 1
-        mapVarToInt = HashMap.empty
-        allClauses = MutableList.empty
-        selectVariables = List.empty
-        allClausesOriginal = MutableList.empty
-        
-        
-        
-        var duplicateVariable = createMasterCircuit(actualCircuit)
-        var originalCircuitVariable = createOriginalCircuit(actualCircuit)
-        
-        var orListSelectVar : MutableList[Literal] = MutableList.empty
-        
-        for(selectVariable1 <- selectVariables){
-            var finalClauseLiterals : MutableList[Literal] = MutableList.empty
-            var newVarSelect : Literal = Literal.create(countVariable)
-            countVariable += 1
-            orListSelectVar += newVarSelect
-            for(selectVariable2 <- selectVariables){
-                if(selectVariable1 == selectVariable2){
-                    allClauses += Clause(List(~newVarSelect,selectVariable2))
-                    finalClauseLiterals += selectVariable2
-                }else{
-                    allClauses += Clause(List(~newVarSelect,~selectVariable2))
-                    finalClauseLiterals += ~selectVariable2
-                }
-            }
-            finalClauseLiterals += newVarSelect
-            allClauses += Clause(finalClauseLiterals.toList)
-            var newVarOrSelect : Literal = Literal.create(countVariable)
-            countVariable += 1
-        }
-        
-        
-        
-        
-        var finalClauseOrLiterals : Literal = Literal.create(countVariable)
-        countVariable += 1
-        for(a <- orListSelectVar){
-            allClauses += Clause(List(~a,finalClauseOrLiterals))
-        }
-        orListSelectVar += ~finalClauseOrLiterals
-        allClauses += Clause(orListSelectVar.toList)
-        allClauses += Clause(List(finalClauseOrLiterals))
-        
-        
-        var xorClauses = allClauses ++ allClausesOriginal
-        
-        
-        
-        var newVar1 : Literal = Literal.create(countVariable)
-        countVariable += 1
-        xorClauses += Clause(List(~newVar1,~originalCircuitVariable))
-        xorClauses += Clause(List(newVar1,originalCircuitVariable))
-        
-        var newVar2 : Literal = Literal.create(countVariable)
-        countVariable += 1
-        xorClauses += Clause(List(~newVar2,newVar1))
-        xorClauses += Clause(List(~newVar2,duplicateVariable))
-        xorClauses += Clause(List(newVar2,~duplicateVariable,~newVar1))
-        
-        var newVar3 : Literal = Literal.create(countVariable)
-        countVariable += 1
-        xorClauses += Clause(List(~newVar3,~duplicateVariable))
-        xorClauses += Clause(List(newVar3,duplicateVariable))
-              
-        var newVar4 : Literal = Literal.create(countVariable)
-        countVariable += 1
-        xorClauses += Clause(List(~newVar4,newVar3))
-        xorClauses += Clause(List(~newVar4,originalCircuitVariable))
-        xorClauses += Clause(List(newVar4,~originalCircuitVariable,~newVar3))
-           
-            
-            
-        var newVar5 : Literal = Literal.create(countVariable)
-        countVariable += 1
-        xorClauses += Clause(List(~newVar2,newVar5))
-        xorClauses += Clause(List(~newVar4,newVar5))
-        xorClauses += Clause(List(newVar2,newVar4,~newVar5))
-        xorClauses += Clause(List(newVar5))
-            
-            
-        
+    
+    
+    def solveEquation(initialVariables : Set[Variable], solveAllClauses : MutableList[Clause]) : Map[Variable, Boolean] = {
+        var resultMap : Map[Variable, Boolean] = Map.empty
         
         val S = new Solver()
-        for(clause <- xorClauses){
+        for (clause <- solveAllClauses){
             S.addClause(clause)
         }
+        val isSAT = S.solve()
+        if (isSAT){
+            for(x <- initialVariables){
+                resultMap = resultMap + (x -> S.modelValue(Literal.create(mapVarToInt(x))))
+            }
+        }
+         
+        resultMap
+    } 
+    
+   
+    var countChangedCircuit =  0
+    
+    def getChangedCircuit(e: Expr, num : Int) : Expr = {
+        e match {
+            case BoolLit(value) => return e
+            case Variable(name) => return e
+            case And(args) => {
+                countChangedCircuit = countChangedCircuit + 1
+                var finalExpr = e
+                var listOfElem : MutableList[Expr] = MutableList.empty
+                if ((countChangedCircuit - 1) == num){
+                    return Or(args)
+                }
+                for (arg <- args){
+                    listOfElem +=  getChangedCircuit(arg,num)
+                }
+                return And(listOfElem.toList)                
+            }
+            case Or(args) => {
+                var finalExpr = e
+                var listOfElem : MutableList[Expr] = MutableList.empty
+                for (arg <- args){
+                    listOfElem = listOfElem :+  getChangedCircuit(arg,num)
+                }
+                return Or(listOfElem.toList)                
+            }
+            case Not(arg) => {
+                return Not(getChangedCircuit(arg,num))              
+            }
+        }
+    }
+    
+    
+
+    def checkEquivalenceOfCircuits(actualCircuit: Expr, givenCircuitEval: (Map[Variable, Boolean]) => Option[Boolean]): Boolean =
+    {
+        var noOfAnds = countNumOfAnds(actualCircuit)
+        println(noOfAnds)
+        val simplifiedActualCircuit = Evaluation.simplify(actualCircuit)
+        val initialVariables = Evaluation.getAllVariables(actualCircuit)
+        val (actualCircuitCNF, newVarCountActual, gateActualVar) = toCNF(simplifiedActualCircuit,1)
+       
+  
+        for(a <- 0 until noOfAnds){
+            countChangedCircuit = 0
+            var tempCircuit = getChangedCircuit(actualCircuit,a)
+            val simplifiedTempCircuit = Evaluation.simplify(tempCircuit)
+            val (tempCircuitCNF,newVarCountTemp,gateTempVar) = toCNF(simplifiedTempCircuit,newVarCountActual)
+            var allClausesTemp = actualCircuitCNF ++ tempCircuitCNF
+            var newVar1 : Literal = Literal.create(newVarCountTemp)
+            allClausesTemp += Clause(List(~newVar1,~gateActualVar))
+            allClausesTemp += Clause(List(newVar1,gateActualVar))
+            
+            var newVar2 : Literal = Literal.create(newVarCountTemp + 1)
+            allClausesTemp += Clause(List(~newVar2,newVar1))
+            allClausesTemp += Clause(List(~newVar2,gateTempVar))
+            allClausesTemp += Clause(List(newVar2,~gateTempVar,~newVar1))
+            
+            var newVar3 : Literal = Literal.create(newVarCountTemp + 2)
+            allClausesTemp += Clause(List(~newVar3,~gateTempVar))
+            allClausesTemp += Clause(List(newVar3,gateTempVar))
+              
+            var newVar4 : Literal = Literal.create(newVarCountTemp + 3)
+            allClausesTemp += Clause(List(~newVar4,newVar3))
+            allClausesTemp += Clause(List(~newVar4,gateActualVar))
+            allClausesTemp += Clause(List(newVar4,~gateActualVar,~newVar3))
+            
+            
+            var newVar5 : Literal = Literal.create(newVarCountTemp + 4)
+            allClausesTemp += Clause(List(~newVar2,newVar5))
+            allClausesTemp += Clause(List(~newVar4,newVar5))
+            allClausesTemp += Clause(List(newVar2,newVar4,~newVar5))
+            allClausesTemp += Clause(List(newVar5))
+            
+            
+            
+            
+            var tempAssignment : Map[Variable, Boolean] = Map.empty
         
-        var isSAT = S.solve()
-        while(isSAT){
-            var resultMap : Map[Variable, Boolean] = Map.empty
+            val S = new Solver()
+            for (clause <- allClausesTemp){
+                S.addClause(clause)
+            }
+            val isSAT = S.solve()
             if (isSAT){
-                for((x,y) <- mapVarToInt){
-                    resultMap = resultMap + (x -> S.modelValue(y))
+                for(x <- initialVariables){
+                    tempAssignment = tempAssignment + (x -> S.modelValue(Literal.create(mapVarToInt(x))))
                 }
             }
-            if(Evaluation.evaluate(actualCircuit, resultMap) != givenCircuitEval(resultMap)){
+         
+            
+            
+            
+            
+            var tempCircuitVal = givenCircuitEval(tempAssignment)
+            var actualCircuitEval = Evaluation.evaluate(actualCircuit,tempAssignment)
+            if(tempCircuitVal != actualCircuitEval){
                 return false
             }
-            
-            var blockingClause : MutableList[Literal] = MutableList.empty
-            for((x,y) <- mapVarToInt){
-                if(S.modelValue(y)){
-                    blockingClause += ~Literal.create(y)
-                }else{
-                    blockingClause += Literal.create(y)
-                }
-            }
-            S.addClause(Clause(blockingClause.toList))
-            
-            isSAT = S.solve()
-            
         }
-        
-        
         true
+
     }
 
 
